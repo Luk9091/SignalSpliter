@@ -1,4 +1,9 @@
 #include "encoder.h"
+
+#define RIGHT_LEFT (-1)
+#define DEBOUNCE_TIME (80)
+
+
 static volatile int rotation;
 static volatile bool button;
 
@@ -6,31 +11,41 @@ static void detect_first_edge(uint gpio){
     uint state = gpio_get_all();
 }
 
+int64_t ENCODER_debouncer_timer(alarm_id_t id, __unused void *data){
+    ENCODER_enable_interrupts();
+    return 0;
+}
+
 void ENCODER_callback(uint gpio, uint32_t events){
     static bool A_fall = false, B_fall = false;
+    uint8_t status = (gpio_get(ENCODER_A) << 1) | gpio_get(ENCODER_B);
 
     switch (gpio)
     {
     case ENCODER_A:{
-        if (!B_fall){
+        if (!B_fall && status == 0){
             A_fall = true;
-        } else {
-            printf("B");
+        } else if (status == 0b01) {
+            // printf("B");
             B_fall = false;
-            rotation = 1;
+            rotation = RIGHT_LEFT;
+            ENCODER_disable_interrupts();
+            add_alarm_in_ms(DEBOUNCE_TIME, ENCODER_debouncer_timer, NULL, false);
         }
     } break;
     case ENCODER_B:{
-        if (!A_fall) {
+        if (!A_fall && status == 0) {
             B_fall = true;
-        } else {
-            printf("A");
+        } else if(status == 0b10) {
+            // printf("A");
             A_fall = false;
-            rotation = -1;
+            rotation = -RIGHT_LEFT;
+            ENCODER_disable_interrupts();
+            add_alarm_in_ms(DEBOUNCE_TIME, ENCODER_debouncer_timer, NULL, false);
         }
     }break;
     case ENCODER_SWITCH:{
-        printf("Push\n");
+        // printf("Push\n");
         button = true;
     }break;
     
