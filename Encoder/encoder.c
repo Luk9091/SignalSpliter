@@ -1,7 +1,7 @@
 #include "encoder.h"
 
 #define RIGHT_LEFT (-1)
-#define DEBOUNCE_TIME (80)
+#define DEBOUNCE_TIME (120)
 
 
 static volatile int rotation;

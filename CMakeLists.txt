@@ -26,6 +26,9 @@ add_executable(${PROJECT_NAME}
     Display/draw_dma.c
     Interface/interface.c
     Encoder/encoder.c
+    Timeout/timeout.c
+    I2C/i2c.c
+    Expander/expander.c
 )
 
 include_directories(${PROJECT_NAME}
@@ -36,6 +39,9 @@ include_directories(${PROJECT_NAME}
     Display/Font
     Interface
     Encoder
+    Timeout
+    I2C
+    Expander
 )
 
 # pico_generate_pio_header(${PROJECT_NAME}
@@ -52,7 +58,8 @@ target_link_libraries(${PROJECT_NAME}
     hardware_gpio
     hardware_spi
     hardware_dma
+    hardware_i2c
 )
 
 pico_enable_stdio_usb(${PROJECT_NAME}  1)
-pico_enable_stdio_uart(${PROJECT_NAME} 1)
+pico_enable_stdio_uart(${PROJECT_NAME} 0)

@@ -2,7 +2,9 @@
 #include <pico/stdlib.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
+#include <pico/error.h>
 #include <hardware/dma.h>
 
 #include <FreeRTOS.h>
@@ -19,6 +21,9 @@
 #include "draw.h"
 #include "interface.h"
 
+#include "i2c.h"
+#include "expander.h"
+
 
 typedef enum SELECT_STATE{
     SELECT_NONE,
@@ -31,6 +36,13 @@ static int channel = 0;
 static int channel_out0;
 static int channel_out1;
 static int out = 0;
+
+static Expander_t expander_0;
+static Expander_t expander_1;
+
+
+static TaskHandle_t hand_controller_handler;
+static bool lock;
 
 void blink_task(__unused void *param){
     while (1){
@@ -97,8 +109,35 @@ static inline void change_output_channel(int channel, int *out, int rotation){
     INTERFACE_set_out_number(*out + 1, channel, 0);
 }
 
+void update_expanders(int channel_0, int channel_1){
+    EXPANDER_put(&expander_0, 0);
+    EXPANDER_put(&expander_1, 0);
 
-void update_display(__unused void *param){
+    uint16_t out0 = 0;
+    uint16_t out1 = 0;
+
+    if (channel_0 >= 0){
+        if (channel_0 < 8) {
+            out0 |= 1 << channel_0*2;
+        } else {
+            out1 |= 1 << ((channel_0 - 8)*2);
+        }
+    }
+
+    if (channel_1 >= 0){
+        if (channel_1 < 8){
+            out0 |= 1 << (channel_1*2 + 1);
+        } else {
+            out1 |= 1 << ((channel_1 - 8)*2 + 1);
+        }
+    }
+
+    EXPANDER_put(&expander_0, out0);
+    EXPANDER_put(&expander_1, out1);
+}
+
+
+void hand_controller(__unused void *param){
 
     while(1){
         if (DRAW_isRun()) vTaskDelay(pdTICKS_TO_MS(20));
@@ -109,13 +148,13 @@ void update_display(__unused void *param){
             vTaskDelay(pdTICKS_TO_MS(50));
             continue;
         }
-        TIMEOUT_reset();
+        // TIMEOUT_reset();
 
         switch (state){
         case SELECT_NONE:{
             state = SELECT_INPUT;
             change_input_channel(&channel, 0);
-            TIMEOUT_setTimeout_ms(10000, auto_disable);
+            // TIMEOUT_setTimeout_ms(1000, auto_disable);
         } break;
 
         case SELECT_INPUT:{
@@ -151,7 +190,8 @@ void update_display(__unused void *param){
                     channel_out1 = out;
                 }
                 state = SELECT_INPUT;
-                TIMEOUT_cancel();
+                update_expanders(channel_out0, channel_out1);
+                // TIMEOUT_cancel();
             }
         }break;
         
@@ -164,9 +204,187 @@ void update_display(__unused void *param){
     }
 }
 
+int getline(char *input){
+    int i = 0;
+    while(i < 64){
+        char c = getchar_timeout_us(100);
+        if (c > 127 || c < 0) {
+            vTaskDelay(pdTICKS_TO_MS(5));
+            continue;
+        }
+
+        if (c == '\x7F' || c == '\x08'){
+            if (i > 0){
+                putchar('\x08');
+                putchar(' ');
+                putchar('\x08');
+                i--;
+                input[i] = 0;
+            }
+            continue;
+        }
+
+
+        if (c == '\r' || c == '\n'){
+            putchar('\n');
+            return i-1;
+        }
+        input[i] = c;
+        i++;
+        input[i] = 0;
+        putchar(c);
+    }
+    return i;
+}
+
+#define NEXT_TOKEN() (strtok(NULL, " "))
+
+int strtoi(const char* str, int *ok, int base){
+    char *end_ptr;
+    int ret = strtol(str, &end_ptr, base);
+    if (end_ptr == str) {
+        *ok = PICO_ERROR_INVALID_DATA;
+        return 0;
+    }
+    *ok = PICO_ERROR_NONE;
+    return ret;
+}
+
+void serial_controller(__unused void *param){
+    putchar('\n');
+    char input[66] = {0};
+    int input_channel = 0;
+    while(true){
+        if (input_channel >= 0){
+            printf("In %i: ", input_channel + 1);
+        }
+
+        getline(input);
+        if (!lock){
+            lock = true;
+            INTERFACE_lock(true);
+            vTaskSuspend(hand_controller_handler);
+            // TIMEOUT_cancel();
+            state = SELECT_NONE;
+            INTERFACE_draw(channel_out0, channel_out1);
+        }
+        
+        char *token = strtok(input, " ");
+
+        while (token){
+            if (strncmp(token, "release", 7) == 0){
+                lock = false;
+                INTERFACE_lock(false);
+            }
+            else if (strncmp(token, "in", 2) == 0){
+                token = NEXT_TOKEN();
+                int ok;
+                int value = strtoi(token, &ok, 10) - 1;
+
+                if (ok != PICO_ERROR_NONE){
+                    printf("Invalid value\n");
+                    putchar('n');
+                    break;
+                }
+                if (value < 0 || value > 1){
+                    printf("Invalid range\n");
+                    putchar('n');
+                    break;
+                }
+
+                input_channel = value;
+            }
+            else if (strncmp(token, "out", 3) == 0){
+                token = NEXT_TOKEN();
+                int ok;
+                int value = strtoi(token, &ok, 10) - 1;
+
+                if (ok != PICO_ERROR_NONE){
+                    printf("Invalid value\n");
+                    putchar('n');
+                    break;
+                }
+                if (value < 0 || value > 15){
+                    printf("Invalid range\n");
+                    putchar('n');
+                    break;
+                }
+
+                if (input_channel == 0){
+                    if (value == channel_out1){
+                        printf("Used port\n");
+                        putchar('n');
+                        break;
+                    }
+                    INTERFACE_set_rect(channel_out0, input_channel, 0);
+                    channel_out0 = value;
+                } else if (input_channel == 1){
+                    if (value == channel_out0) {
+                        printf("Used port\n");
+                        putchar('n');
+                        break;
+                    }
+                    INTERFACE_set_rect(channel_out1, input_channel, 0);
+                    channel_out1 = value;
+                }
+                INTERFACE_clear_out_number(input_channel, 0);
+                INTERFACE_set_out_number(value+1, input_channel, DISPLAY_BRIGHTNESS);
+                INTERFACE_set_rect(value, input_channel, DISPLAY_BRIGHTNESS);
+            } else if (strncmp(token, "off", 3) == 0){
+                if (input_channel == 0){
+                    INTERFACE_set_rect(channel_out0, input_channel, 0);
+                    channel_out0 = -1;
+                } else if (input_channel == 1){
+                    INTERFACE_set_rect(channel_out1, input_channel, 0);
+                    channel_out1 = -1;
+                }
+                INTERFACE_clear_out_number(input_channel, 0);
+
+            }
+            else {
+                printf("Invalid command\n");
+                putchar('n');
+                break;
+            }
+
+            token = NEXT_TOKEN();
+        }
+        printf("OK\n");
+        
+        update_expanders(channel_out0, channel_out1);
+        INTERFACE_update();
+        if (!lock){
+            vTaskResume(hand_controller_handler);
+        }
+        // vTaskDelay(pdTICKS_TO_MS(100));
+    }
+}
+
+
+void circularOne(__unused void *param){
+    int out = -1;
+    while (1){
+        INTERFACE_set_rect(out, 1, 0);
+        out++;
+        if (out > 15) out = 0;
+        update_expanders(-1, out);
+
+        INTERFACE_clear_out_number(1, 0);
+        INTERFACE_set_out_number(out+1, 1, DISPLAY_BRIGHTNESS);
+        INTERFACE_set_rect(out, 1, DISPLAY_BRIGHTNESS);
+        INTERFACE_update();
+        vTaskDelay(pdTICKS_TO_MS(1000));
+    }
+    
+}
+
 
 
 int main(){
+    channel_out0 = -1;
+    channel_out1 = -1;
+    lock = false;
+
     stdio_init_all();
     LED_Init();
 
@@ -174,13 +392,28 @@ int main(){
 
     SPI_Init();
     INTERFACE_Init();
-    INTERFACE_draw();
+    INTERFACE_draw(channel_out0, channel_out1);
     INTERFACE_update();
 
-    channel_out0 = 0;
-    channel_out1 = 1;
+    // I2C_Init(I2C_CHANNEL_0, 12, 13);
+    // I2C_Init(I2C_CHANNEL_1, 2, 3);
+    I2C_Init(I2C_CHANNEL_0, 0, 1);
+    I2C_Init(I2C_CHANNEL_1, 14, 15);
+    // expander_0 = EXPANDER_init(I2C_CHANNEL_0, 0x20, 11);
+    // expander_1 = EXPANDER_init(I2C_CHANNEL_1, 0x20, 4);
+    expander_0 = EXPANDER_init(I2C_CHANNEL_0, 0x20, 28);
+    expander_1 = EXPANDER_init(I2C_CHANNEL_1, 0x20, 16);
+    EXPANDER_set_dir(&expander_0, 0x0000);
+    EXPANDER_set_dir(&expander_1, 0x0000);
+    EXPANDER_put(&expander_0, 0);
+    EXPANDER_put(&expander_1, 0);
+
+
     xTaskCreate(blink_task, "Blink task", configMINIMAL_STACK_SIZE, NULL, 3, NULL);
-    xTaskCreate(update_display, "Update display", 2048, NULL, 3, NULL);
+    xTaskCreate(hand_controller, "hand controller", 2048, NULL, 3, &hand_controller_handler);
+    xTaskCreate(serial_controller, "serial controller", 2048, NULL, 3, NULL);
+    // xTaskCreate(circularOne, "serial controller", 2048, NULL, 3, NULL);
+    
     vTaskStartScheduler();
 
     while (1){}

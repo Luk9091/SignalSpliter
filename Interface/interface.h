@@ -35,11 +35,16 @@
 #define INTERFACE_OUT_NUM_2_X           (INTERFACE_TEXT_2_X + INTERFACE_FONT_WIDTH*7)
 #define INTERFACE_OUT_NUM_2_Y           (INTERFACE_TEXT_2_Y)
 
+#define INTERFACE_LOCK_X                (INTERFACE_CHANNEL_BORDER_SIZE*7.5)
+#define INTERFACE_LOCK_Y                (DISPLAY_HEIGHT/10)
+#define INTERFACE_LOCK_WITH             (16)
+#define INTERFACE_LOCK_HEIGHT           (16)
+
 
 void INTERFACE_Init();
 void INTERFACE_update();
 
-void INTERFACE_draw();
+void INTERFACE_draw(int channel_0, int channel_1);
 void INTERFACE_clear_out_number(bool channel, uint8_t brightness);
 void INTERFACE_set_out_number(int number, bool channel, uint8_t brightness);
 
@@ -50,5 +55,7 @@ void INTERFACE_channel_frame(bool channel, uint8_t brightness);
 void INTERFACE_channel_fill_frame(bool channel, uint8_t brightness);
 
 void INTERFACE_draw_text(bool channel, uint8_t brightness);
+
+void INTERFACE_lock(bool lock);
 
 #endif

@@ -7,9 +7,9 @@
 #include "spi.h"
 #include "draw_dma.h"
 
-#define DISPLAY_DC_GPIO     16
-#define DISPLAY_CS_GPIO     13
-#define DISPLAY_RS_GPIO     17
+#define DISPLAY_DC_GPIO     6
+#define DISPLAY_CS_GPIO     5
+#define DISPLAY_RS_GPIO     7
 
 typedef enum DISPLAY_MODE{
     DISPLAY_MODE_ALL_OFF    = 0,

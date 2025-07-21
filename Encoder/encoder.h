@@ -1,9 +1,9 @@
 #ifndef __ENCODER_H__
 #define __ENCODER_H__
 
-#define ENCODER_A	    19
-#define ENCODER_B	    18
-#define ENCODER_SWITCH	12
+#define ENCODER_A	    18
+#define ENCODER_B	    17
+#define ENCODER_SWITCH	19
 
 #include <stdio.h>
 #include <pico/stdlib.h>

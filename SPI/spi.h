@@ -5,9 +5,12 @@
 #include <hardware/spi.h>
 #include <hardware/gpio.h>
 
-#define SPI_CHANNEL  spi1
-#define SPI_TXD_GPIO 14
-#define SPI_SCK_GPIO 15
+// #define SPI_CHANNEL  spi1
+// #define SPI_TXD_GPIO 15
+// #define SPI_SCK_GPIO 14
+#define SPI_CHANNEL  spi0
+#define SPI_TXD_GPIO 2
+#define SPI_SCK_GPIO 3
 #define SPI_SPEED    (1 * MHZ)
 
 
