@@ -20,8 +20,9 @@ static inline uint dma_getCurrentIndex(uint dmaChannel){
 
 
 void dma_finish_write(){
+    dma_hw->ints0 = 1 << channel;
+    // dma_channel_abort(channel);
     SPI_select(DISPLAY_CS_GPIO);
-    dma_channel_abort(channel);
 }
 
 
