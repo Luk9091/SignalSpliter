@@ -5,7 +5,7 @@
 #include "draw.h"
 
 #define INTERFACE_DRAW_GRID             false
-#define INTERFACE_UPDATE_VIA_DMA        false
+#define INTERFACE_UPDATE_VIA_DMA        true
 
 #define DISPLAY_WIDTH                   (256)
 #define DISPLAY_HEIGHT                  (64)
@@ -40,9 +40,14 @@
 #define INTERFACE_LOCK_WITH             (16)
 #define INTERFACE_LOCK_HEIGHT           (16)
 
+#define INTERFACE_SCREENSAVER_WIDTH     (32)
+#define INTERFACE_SCREENSAVER_HEIGHT    (52)
+
 
 void INTERFACE_Init();
 void INTERFACE_update();
+
+void INTERFACE_clear();
 
 void INTERFACE_draw(int channel_0, int channel_1);
 void INTERFACE_clear_out_number(bool channel, uint8_t brightness);
@@ -57,5 +62,9 @@ void INTERFACE_channel_fill_frame(bool channel, uint8_t brightness);
 void INTERFACE_draw_text(bool channel, uint8_t brightness);
 
 void INTERFACE_lock(bool lock);
+
+
+void INTERFACE_clear_screensaver(uint8_t x, uint8_t y);
+void INTERFACE_draw_screensaver(uint8_t x, uint8_t y);
 
 #endif

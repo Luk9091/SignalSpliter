@@ -14,12 +14,12 @@
 
 #include "led.h"
 #include "encoder.h"
-#include "timeout.h"
 
 #include "spi.h"
 
 #include "draw.h"
 #include "interface.h"
+#include "screensaver.h"
 
 #include "i2c.h"
 #include "expander.h"
@@ -44,6 +44,8 @@ static Expander_t expander_1;
 static TaskHandle_t hand_controller_handler;
 static bool lock;
 
+
+
 void blink_task(__unused void *param){
     while (1){
         LED_toggle();
@@ -60,7 +62,6 @@ static inline void change_input_channel(int *channel, int rotation){
 
 
 int64_t auto_disable(alarm_id_t id, __unused void *data){
-    TIMEOUT_stop();
 
     int tmp;
     if (channel == 0){
@@ -141,20 +142,22 @@ void hand_controller(__unused void *param){
 
     while(1){
         if (DRAW_isRun()) vTaskDelay(pdTICKS_TO_MS(20));
-
         int rotation = ENCODER_getValue();
         bool accept = ENCODER_getAccept();
         if (rotation == 0 && accept == false) {
             vTaskDelay(pdTICKS_TO_MS(50));
             continue;
         }
-        // TIMEOUT_reset();
+
+        if(SCREENSAVER_isRun()){
+            SCREENSAVER_disable(channel_out0, channel_out1);
+        }
+
 
         switch (state){
         case SELECT_NONE:{
             state = SELECT_INPUT;
             change_input_channel(&channel, 0);
-            // TIMEOUT_setTimeout_ms(1000, auto_disable);
         } break;
 
         case SELECT_INPUT:{
@@ -191,7 +194,6 @@ void hand_controller(__unused void *param){
                 }
                 state = SELECT_INPUT;
                 update_expanders(channel_out0, channel_out1);
-                // TIMEOUT_cancel();
             }
         }break;
         
@@ -254,10 +256,12 @@ void serial_controller(__unused void *param){
     putchar('\n');
     char input[66] = {0};
     int input_channel = 0;
+    bool update;
+    
     while(true){
-        if (input_channel >= 0){
-            printf("In %i: ", input_channel + 1);
-        }
+        // if (input_channel >= 0){
+        //     printf("In %i: ", input_channel + 1);
+        // }
 
         getline(input);
         if (!lock){
@@ -272,11 +276,30 @@ void serial_controller(__unused void *param){
         char *token = strtok(input, " ");
 
         while (token){
+            update = false;
             if (strncmp(token, "release", 7) == 0){
+                update = true;
                 lock = false;
                 INTERFACE_lock(false);
             }
+            else if (strncmp(token, "clear", 5) == 0) {
+                INTERFACE_clear();
+                INTERFACE_update();
+            }
+            else if (strncmp(token, "draw", 4) == 0) {
+                INTERFACE_draw(-1, -1);
+                INTERFACE_update();
+            }
+            else if (strncmp(token, "screen", 6) == 0) {
+                if (!SCREENSAVER_isRun()){
+                    SCREENSAVER_enable();
+                    
+                    printf("Run screensaver\n");
+                    lock = false;
+                } 
+            }
             else if (strncmp(token, "in", 2) == 0){
+                update = true;
                 token = NEXT_TOKEN();
                 int ok;
                 int value = strtoi(token, &ok, 10) - 1;
@@ -295,6 +318,7 @@ void serial_controller(__unused void *param){
                 input_channel = value;
             }
             else if (strncmp(token, "out", 3) == 0){
+                update = true;
                 token = NEXT_TOKEN();
                 int ok;
                 int value = strtoi(token, &ok, 10) - 1;
@@ -331,6 +355,7 @@ void serial_controller(__unused void *param){
                 INTERFACE_set_out_number(value+1, input_channel, DISPLAY_BRIGHTNESS);
                 INTERFACE_set_rect(value, input_channel, DISPLAY_BRIGHTNESS);
             } else if (strncmp(token, "off", 3) == 0){
+                update = true;
                 if (input_channel == 0){
                     INTERFACE_set_rect(channel_out0, input_channel, 0);
                     channel_out0 = -1;
@@ -351,8 +376,16 @@ void serial_controller(__unused void *param){
         }
         printf("OK\n");
         
-        update_expanders(channel_out0, channel_out1);
-        INTERFACE_update();
+        if (update){
+            if (SCREENSAVER_isRun()) {
+                SCREENSAVER_disable(channel_out0, channel_out1);
+                INTERFACE_lock(true);
+            }
+
+            update_expanders(channel_out0, channel_out1);
+            INTERFACE_update();
+        }
+
         if (!lock){
             vTaskResume(hand_controller_handler);
         }
@@ -377,6 +410,8 @@ void circularOne(__unused void *param){
     }
     
 }
+
+
 
 
 
@@ -408,12 +443,12 @@ int main(){
     EXPANDER_put(&expander_0, 0);
     EXPANDER_put(&expander_1, 0);
 
-
     xTaskCreate(blink_task, "Blink task", configMINIMAL_STACK_SIZE, NULL, 3, NULL);
     xTaskCreate(hand_controller, "hand controller", 2048, NULL, 3, &hand_controller_handler);
     xTaskCreate(serial_controller, "serial controller", 2048, NULL, 3, NULL);
     // xTaskCreate(circularOne, "serial controller", 2048, NULL, 3, NULL);
-    
+
+    // vTaskSuspend(screensaver_hanlder);
     vTaskStartScheduler();
 
     while (1){}

@@ -26,9 +26,9 @@ add_executable(${PROJECT_NAME}
     Display/draw_dma.c
     Interface/interface.c
     Encoder/encoder.c
-    Timeout/timeout.c
     I2C/i2c.c
     Expander/expander.c
+    Interface/Screensaver/screensaver.c
 )
 
 include_directories(${PROJECT_NAME}
@@ -39,9 +39,9 @@ include_directories(${PROJECT_NAME}
     Display/Font
     Interface
     Encoder
-    Timeout
     I2C
     Expander
+    Interface/Screensaver
 )
 
 # pico_generate_pio_header(${PROJECT_NAME}

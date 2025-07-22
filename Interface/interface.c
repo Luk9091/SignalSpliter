@@ -11,6 +11,7 @@
 #include "draw_dma.h"
 
 static uint8_t tx_buf[256 * 64 / 2];
+#include "logo_agh.h"
 static uint8_t lockIcon[128] = {
 0x00,0x00,0x0F,0xFF,0xFF,0x00,0x00,0x00,
 0x00,0x00,0xFF,0xFF,0xFF,0xF0,0x00,0x00,
@@ -39,6 +40,10 @@ void INTERFACE_Init(){
 #if INTERFACE_UPDATE_VIA_DMA
     DRAW_DMA_Init(tx_buf, 8192);
 #endif
+}
+
+void INTERFACE_clear(){
+    draw_rect_filled(tx_buf, 0, 0, DISPLAY_WIDTH-1, DISPLAY_HEIGHT-1, 0);
 }
 
 void INTERFACE_update(){
@@ -172,4 +177,13 @@ void INTERFACE_lock(bool lock){
     } else {
         draw_bitmap_4bpp(tx_buf, lockIcon, INTERFACE_LOCK_X, INTERFACE_LOCK_Y, INTERFACE_LOCK_WITH, INTERFACE_LOCK_HEIGHT);
     }
+}
+
+
+void INTERFACE_clear_screensaver(uint8_t x, uint8_t y){
+    draw_rect_filled(tx_buf, x, y, x+INTERFACE_SCREENSAVER_WIDTH, y+INTERFACE_SCREENSAVER_HEIGHT, 0);
+}
+
+void INTERFACE_draw_screensaver(uint8_t x, uint8_t y){
+    draw_bitmap_4bpp(tx_buf, logo_agh, x, y, INTERFACE_SCREENSAVER_WIDTH, INTERFACE_SCREENSAVER_HEIGHT);
 }
