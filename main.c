@@ -41,8 +41,8 @@ static Expander_t expander_0;
 static Expander_t expander_1;
 
 
-static TaskHandle_t hand_controller_handler;
-static bool lock;
+TaskHandle_t hand_controller_handler;
+bool lock;
 
 
 
@@ -152,6 +152,7 @@ void hand_controller(__unused void *param){
         if(SCREENSAVER_isRun()){
             SCREENSAVER_disable(channel_out0, channel_out1);
         }
+        SCREENSAVER_TIMEOUT_reset();
 
 
         switch (state){
@@ -274,6 +275,7 @@ void serial_controller(__unused void *param){
         }
         
         char *token = strtok(input, " ");
+        SCREENSAVER_TIMEOUT_reset();
 
         while (token){
             update = false;
@@ -442,6 +444,8 @@ int main(){
     EXPANDER_set_dir(&expander_1, 0x0000);
     EXPANDER_put(&expander_0, 0);
     EXPANDER_put(&expander_1, 0);
+
+    SCREENSAVER_TIMEOUT_run();
 
     xTaskCreate(blink_task, "Blink task", configMINIMAL_STACK_SIZE, NULL, 3, NULL);
     xTaskCreate(hand_controller, "hand controller", 2048, NULL, 3, &hand_controller_handler);

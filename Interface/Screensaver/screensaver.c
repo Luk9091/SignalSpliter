@@ -2,6 +2,28 @@
 
 static TaskHandle_t screensaver_hanlder;
 
+static alarm_id_t screensaver_alarm_id;
+static int64_t enable_callback(alarm_id_t id, __unused void *param){
+    if (!SCREENSAVER_isRun()){
+        SCREENSAVER_enable();
+    }
+    return 0;
+}
+
+
+void SCREENSAVER_TIMEOUT_run(){
+    screensaver_alarm_id = add_alarm_in_ms(SCREENSAVER_TIMEOUT, enable_callback, NULL, false);
+}
+
+void SCREENSAVER_TIMEOUT_reset(){
+    if (screensaver_alarm_id > 0){
+        cancel_alarm(screensaver_alarm_id);
+    }
+    SCREENSAVER_TIMEOUT_run();
+}
+
+
+
 void screensaver(__unused void *param){
     int step = 16;
     int delay = 500;
@@ -43,6 +65,11 @@ void screensaver(__unused void *param){
 
 void SCREENSAVER_enable(){
     xTaskCreate(screensaver, "screen saver", 2048, NULL, 3, &screensaver_hanlder);
+
+    if (lock){
+        vTaskResume(hand_controller_handler);
+        lock = false;
+    }
 }
 
 
